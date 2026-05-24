@@ -233,7 +233,7 @@ input[type=file]{display:none}
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="hideKonfirmasi()">Batal</button>
-      <button class="btn-confirm" id="btnConfirm" onclick="kirim()">Ya, kirim</button>
+      <button class="btn-confirm" onclick="kirim()">Ya, kirim</button>
     </div>
   </div>
 </div>
@@ -260,14 +260,14 @@ input[type=file]{display:none}
 </div>
 
 <script>
-// ============ CONFIG ============
 var PIN_BENAR = '1234';
 var SECRET_KEY = 'TKIT-ASY-2026';
 var WEBHOOK_URL = 'https://n8n.srv1334517.hstgr.cloud/webhook/absensi';
 var MAX_PIN_ATTEMPTS = 3;
-var LOCKOUT_SECONDS = 300; // 5 menit
+var LOCKOUT_SECONDS = 300;
+var MAX_IMG = 1280;
+var IMG_QUALITY = 0.7;
 
-// ============ STATE ============
 var pinVal = '';
 var pinAttempts = 0;
 var lockoutTimer = null;
@@ -276,7 +276,6 @@ var isSubmitting = false;
 var statusLabel = {MASUK:'Masuk',KELUAR:'Keluar',KELUAR_SEMENTARA:'Keluar sementara',MASUK_KEMBALI:'Masuk kembali'};
 var badgeMap = {MASUK:'badge-masuk',KELUAR:'badge-keluar',KELUAR_SEMENTARA:'badge-ks',MASUK_KEMBALI:'badge-mk'};
 
-// ============ UTILS ============
 function pad(n){return String(n).padStart(2,'0')}
 function jamNow(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())}
 function tglNow(){var d=new Date();return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()}
@@ -288,16 +287,16 @@ function showPage(id){
   document.getElementById(id).classList.add('active');
 }
 
-// ============ PIN ============
+// PIN
 function pinInput(n){
-  if(lockoutTimer) return;
-  if(pinVal.length>=4) return;
+  if(lockoutTimer)return;
+  if(pinVal.length>=4)return;
   pinVal+=n;
   updateDots(false);
-  if(pinVal.length===4) setTimeout(cekPin,150);
+  if(pinVal.length===4)setTimeout(cekPin,150);
 }
 function pinDel(){
-  if(lockoutTimer) return;
+  if(lockoutTimer)return;
   pinVal=pinVal.slice(0,-1);
   updateDots(false);
   document.getElementById('pinErr').textContent='';
@@ -306,13 +305,13 @@ function updateDots(isError){
   for(var i=0;i<4;i++){
     var d=document.getElementById('d'+i);
     d.className='pin-dot';
-    if(i<pinVal.length) d.classList.add(isError?'error':'filled');
+    if(i<pinVal.length)d.classList.add(isError?'error':'filled');
   }
 }
 function setPinBtnsDisabled(disabled){
   ['pb0','pb1','pb2','pb3','pb4','pb5','pb6','pb7','pb8','pb9'].forEach(function(id){
     var el=document.getElementById(id);
-    if(el) el.disabled=disabled;
+    if(el)el.disabled=disabled;
   });
 }
 function cekPin(){
@@ -323,17 +322,14 @@ function cekPin(){
     pinAttempts++;
     updateDots(true);
     if(pinAttempts>=MAX_PIN_ATTEMPTS){
-      // Lockout
       setPinBtnsDisabled(true);
-      document.getElementById('pinErr').textContent='';
       var sisa=LOCKOUT_SECONDS;
+      document.getElementById('pinErr').textContent='';
       document.getElementById('pinLockout').textContent='Terlalu banyak percobaan. Coba lagi dalam '+sisa+' detik';
       lockoutTimer=setInterval(function(){
         sisa--;
         if(sisa<=0){
-          clearInterval(lockoutTimer);
-          lockoutTimer=null;
-          pinAttempts=0;
+          clearInterval(lockoutTimer);lockoutTimer=null;pinAttempts=0;
           setPinBtnsDisabled(false);
           document.getElementById('pinLockout').textContent='';
           document.getElementById('pinErr').textContent='';
@@ -349,7 +345,28 @@ function cekPin(){
   }
 }
 
-// ============ FORM ============
+// COMPRESS FOTO
+function compressFoto(file, callback){
+  var img = new Image();
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var w = img.width, h = img.height;
+      if(w > h){ if(w > MAX_IMG){ h = Math.round(h * MAX_IMG / w); w = MAX_IMG; } }
+      else { if(h > MAX_IMG){ w = Math.round(w * MAX_IMG / h); h = MAX_IMG; } }
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var compressed = canvas.toDataURL('image/jpeg', IMG_QUALITY);
+      callback(compressed);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// FORM
 function pilih(el){
   document.querySelectorAll('.s-btn').forEach(function(b){b.className='s-btn'});
   status=el.dataset.v;
@@ -359,17 +376,16 @@ function pilih(el){
 function handleFoto(e){
   var f=e.target.files[0];if(!f)return;
   jamKirim=jamNow();tglKirim=tglNow();
-  var r=new FileReader();
-  r.onload=function(ev){
-    foto64=ev.target.result.split(',')[1];
-    document.getElementById('prevImg').src=ev.target.result;
+  compressFoto(f, function(compressed){
+    foto64=compressed.split(',')[1];
+    document.getElementById('prevImg').src=compressed;
     document.getElementById('prevBox').style.display='block';
     document.getElementById('fotoArea').style.display='none';
     document.getElementById('chips').style.display='flex';
     document.getElementById('chipJam').textContent=jamKirim;
     document.getElementById('chipTgl').textContent=tglKirim;
     cek();
-  };r.readAsDataURL(f);
+  });
 }
 function hapus(){
   foto64='';jamKirim='';tglKirim='';
@@ -383,9 +399,9 @@ function cek(){
   document.getElementById('btnKirim').disabled=!ok;
 }
 
-// ============ KONFIRMASI ============
+// KONFIRMASI
 function showKonfirmasi(){
-  if(isSubmitting) return;
+  if(isSubmitting)return;
   var nama=document.getElementById('nama').value;
   document.getElementById('konfNama').textContent=nama;
   document.getElementById('konfStatus').textContent=statusLabel[status]||status;
@@ -397,46 +413,29 @@ function hideKonfirmasi(){
   document.getElementById('modalOverlay').classList.remove('show');
 }
 
-// ============ TOAST ============
 function showToast(msg,type){
   var t=document.getElementById('toast');
   t.textContent=msg;t.className='toast '+type;
   setTimeout(function(){t.className='toast'},4500);
 }
 
-// ============ KIRIM ============
+// KIRIM
 async function kirim(){
-  if(isSubmitting) return; // Anti double submit
+  if(isSubmitting)return;
   hideKonfirmasi();
-
   var nama=document.getElementById('nama').value;
   var btn=document.getElementById('btnKirim');
-
-  // Lock submit
   isSubmitting=true;
   btn.disabled=true;
   btn.innerHTML='<div class="spinner"></div> Mengirim...';
-
   try{
     var res=await fetch(WEBHOOK_URL,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Secret-Key': SECRET_KEY
-      },
-      body:JSON.stringify({
-        nama:nama,
-        status:status,
-        jam:jamKirim,
-        tanggal:tglKirim,
-        foto:foto64
-      })
+      headers:{'Content-Type':'application/json','X-Secret-Key':SECRET_KEY},
+      body:JSON.stringify({nama:nama,status:status,jam:jamKirim,tanggal:tglKirim,foto:foto64})
     });
-
     var data=await res.json();
-
-    if(res.ok && data.success){
-      // Tampil halaman sukses
+    if(res.ok&&data.success){
       document.getElementById('suksesNama').textContent=nama;
       document.getElementById('suksesStatus').innerHTML='<span class="status-badge '+badgeMap[status]+'">'+statusLabel[status]+'</span>';
       document.getElementById('suksesJam').textContent=jamKirim;
@@ -445,17 +444,15 @@ async function kirim(){
     } else {
       showToast(data.message||'Gagal kirim, coba lagi.','err');
     }
-  } catch(e) {
+  }catch(e){
     showToast('Gagal kirim, periksa koneksi internet.','err');
   }
-
-  // Unlock submit
   isSubmitting=false;
   btn.innerHTML='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Kirim absensi';
   cek();
 }
 
-// ============ RESET ============
+// RESET
 function resetForm(){
   foto64='';jamKirim='';tglKirim='';status='';isSubmitting=false;
   document.getElementById('nama').value='';
