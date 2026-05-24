@@ -413,10 +413,13 @@ function hideKonfirmasi(){
   document.getElementById('modalOverlay').classList.remove('show');
 }
 
-function showToast(msg,type){
-  var t=document.getElementById('toast');
-  t.textContent=msg;t.className='toast '+type;
-  setTimeout(function(){t.className='toast'},4500);
+function showToast(msg, type){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  // Error lebih lama, sukses normal
+  var duration = type === 'err' ? 8000 : 4500;
+  setTimeout(function(){t.className='toast'}, duration);
 }
 
 // KIRIM
